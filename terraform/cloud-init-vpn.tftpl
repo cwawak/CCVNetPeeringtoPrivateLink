@@ -1,0 +1,71 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - python3
+  - python3-venv
+  - python3-pip
+  - unzip
+  - jq
+  - wireguard
+  - curl
+  - dnsmasq
+
+runcmd:
+  # Install Confluent CLI
+  - [bash, -lc, "curl -sL --http1.1 https://cnfl.io/cli | sh -s -- -b /usr/local/bin"]
+
+  # DNS Forwarding Setup (routes VPN client DNS through Azure DNS for private zone resolution)
+  # Note: dnsmasq is configured here but started AFTER WireGuard so 10.200.0.1 exists when it binds
+  - [bash, -c, "echo '=== Configuring DNS forwarding ===' | tee /var/log/wireguard-setup.log"]
+  - [bash, -c, "sed -i 's/#DNSStubListener=yes/DNSStubListener=no/' /etc/systemd/resolved.conf"]
+  - [systemctl, restart, systemd-resolved]
+  - [bash, -c, "printf 'server=168.63.129.16\nlisten-address=${wireguard_server_ip},127.0.0.1\nbind-dynamic\n' > /etc/dnsmasq.d/azure-dns.conf"]
+  - [systemctl, enable, dnsmasq]
+
+  # Wireguard VPN Setup
+  - [bash, -c, "echo '=== Starting WireGuard VPN Server Setup ===' | tee /var/log/wireguard-setup.log"]
+  - [bash, -c, "echo 'Enabling IP forwarding...' | tee -a /var/log/wireguard-setup.log"]
+  - [bash, -c, "echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf"]
+  - [sysctl, -p]
+
+  - [bash, -c, "echo 'Setting up WireGuard configuration...' | tee -a /var/log/wireguard-setup.log"]
+  - [mkdir, -p, /etc/wireguard]
+  - [bash, -c, "cd /etc/wireguard && wg genkey | tee server_private.key | wg pubkey > server_public.key"]
+  - [bash, -c, "cd /etc/wireguard && wg genkey | tee client_private.key | wg pubkey > client_public.key"]
+  - [chmod, "600", /etc/wireguard/server_private.key]
+  - [chmod, "600", /etc/wireguard/client_private.key]
+
+  - [bash, -c, "echo 'Getting VM public IP...' | tee -a /var/log/wireguard-setup.log"]
+  - [bash, -c, "EXTERNAL_IP=$(curl -s ifconfig.me || curl -s icanhazip.com || curl -s ipinfo.io/ip) && echo $EXTERNAL_IP > /etc/wireguard/external_ip.txt"]
+
+  - [bash, -c, "echo 'Creating WireGuard server configuration...' | tee -a /var/log/wireguard-setup.log"]
+  - [bash, -c, "cat > /etc/wireguard/wg0.conf << 'WGEOF'\n# WireGuard Server Configuration\n[Interface]\nAddress = ${wireguard_server_address}\nListenPort = ${wireguard_listen_port}\nPrivateKey = PLACEHOLDER_SERVER_PRIVATE_KEY\n\n# NAT and forwarding rules for eth0 (Azure default interface)\nPostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o eth0 -j ACCEPT\nPostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o eth0 -j ACCEPT\n\n[Peer]\n# Client peer configuration\nPublicKey = PLACEHOLDER_CLIENT_PUBLIC_KEY\nAllowedIPs = ${wireguard_client_ip}/32\nWGEOF\n"]
+
+  - [bash, -c, "sed -i \"s|PLACEHOLDER_SERVER_PRIVATE_KEY|$(cat /etc/wireguard/server_private.key)|\" /etc/wireguard/wg0.conf"]
+  - [bash, -c, "sed -i \"s|PLACEHOLDER_CLIENT_PUBLIC_KEY|$(cat /etc/wireguard/client_public.key)|\" /etc/wireguard/wg0.conf"]
+  - [chmod, "600", /etc/wireguard/wg0.conf]
+
+  - [bash, -c, "echo 'Creating client configuration...' | tee -a /var/log/wireguard-setup.log"]
+  - [bash, -c, "cat > /tmp/client.conf << 'CLIENTEOF'\n# WireGuard Client Configuration\n# Import this file into your WireGuard client application\n[Interface]\nPrivateKey = PLACEHOLDER_CLIENT_PRIVATE_KEY\nAddress = ${wireguard_client_address}\nDNS = ${wireguard_server_ip}\n\n[Peer]\nPublicKey = PLACEHOLDER_SERVER_PUBLIC_KEY\nEndpoint = PLACEHOLDER_EXTERNAL_IP:${wireguard_listen_port}\nAllowedIPs = ${vnet_address_space}, ${confluent_peering_cidr}, ${wireguard_vpn_cidr}\nPersistentKeepalive = 25\nCLIENTEOF\n"]
+
+  - [bash, -c, "sed -i \"s|PLACEHOLDER_CLIENT_PRIVATE_KEY|$(cat /etc/wireguard/client_private.key)|\" /tmp/client.conf"]
+  - [bash, -c, "sed -i \"s|PLACEHOLDER_SERVER_PUBLIC_KEY|$(cat /etc/wireguard/server_public.key)|\" /tmp/client.conf"]
+  - [bash, -c, "sed -i \"s|PLACEHOLDER_EXTERNAL_IP|$(cat /etc/wireguard/external_ip.txt)|\" /tmp/client.conf"]
+  - [chmod, "600", /tmp/client.conf]
+  - [chown, "azureuser:azureuser", /tmp/client.conf]
+
+  - [bash, -c, "echo 'Starting WireGuard service...' | tee -a /var/log/wireguard-setup.log"]
+  - [systemctl, enable, wg-quick@wg0]
+  - [systemctl, start, wg-quick@wg0]
+
+  # Start dnsmasq AFTER WireGuard so 10.200.0.1 exists on wg0 when dnsmasq binds
+  - [bash, -c, "echo 'Starting dnsmasq DNS forwarder...' | tee -a /var/log/wireguard-setup.log"]
+  - [systemctl, restart, dnsmasq]
+
+  - [bash, -c, "echo 'Verifying WireGuard service...' | tee -a /var/log/wireguard-setup.log"]
+  - [bash, -c, "systemctl is-active wg-quick@wg0 && echo 'WireGuard service is running' || echo 'WARNING: WireGuard service may not be running' | tee -a /var/log/wireguard-setup.log"]
+
+  - [bash, -c, "echo \"WireGuard setup completed successfully at $(date)\" | tee /tmp/wireguard-setup-complete"]
+  - [bash, -c, "echo '=== WireGuard VPN Server Setup Complete ===' | tee -a /var/log/wireguard-setup.log"]
+  - [bash, -c, "echo 'Client configuration file created at: /tmp/client.conf' | tee -a /var/log/wireguard-setup.log"]

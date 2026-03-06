@@ -1,0 +1,32 @@
+# Confluent Cloud API credentials (create at: https://confluent.cloud → Profile → Cloud API keys)
+confluent_cloud_api_key    = ""
+confluent_cloud_api_secret = ""
+
+# Azure subscription ID (optional - uses active subscription from 'az login' if not provided)
+# Get with: az account show --query id -o tsv
+# azure_subscription_id = ""
+
+project_name            = "cc-vnet-peering-privatelink-demo"
+azure_location          = "East US"
+confluent_azure_region  = "eastus"
+azure_vnet_region_short = "eastus"
+
+vnet_address_space          = "10.0.0.0/16"
+subnet_apps_cidr            = "10.0.1.0/26"
+subnet_private_endpoint_cidr = "10.0.2.0/27"
+confluent_peering_cidr      = "10.50.0.0/16"
+
+cluster_a_cku          = 1
+cluster_b_cku          = 1
+cluster_a_availability = "SINGLE_ZONE"
+cluster_b_availability = "SINGLE_ZONE"
+
+cluster_link_name = "cluster-a-to-cluster-b"
+orders_topic_name = "retail.orders.v1"
+
+vm_admin_username   = "azureuser"
+vm_admin_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..."
+vm_size             = "Standard_B2s"
+
+# Restrict this in real deployments (for example, "203.0.113.10/32")
+vm_source_address_prefix = "*"

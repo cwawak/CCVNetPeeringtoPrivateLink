@@ -1,0 +1,37 @@
+# Terraform state and working directory
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.tfstate.lock.info
+
+# Terraform input files containing credentials
+terraform.tfvars
+terraform/terraform.tfvars
+
+# SSH keys and VPN artifacts
+*.pem
+*_key
+demo_vm_key
+demo_vm_key.pub
+wireguard-client.conf
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS and editor
+.DS_Store
+.idea/
+.vscode/
+
+# Logs and scratch files
+*.log
+output.txt
+pane-*.txt
+notes*
