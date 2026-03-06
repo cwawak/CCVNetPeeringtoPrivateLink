@@ -17,19 +17,19 @@ Demonstrates a **zero-downtime Kafka migration** from **VNet Peering** to **Azur
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Azure VNet (10.0.0.0/16)                                         │
+│  Azure VNet (10.0.0.0/16)                                           │
 │                                                                     │
-│  ┌──────────────┐     ┌──────────────────────────────────────────┐ │
-│  │  VM subnet   │     │  Private Endpoint subnet                 │ │
-│  │  10.0.1.0/26 │     │  10.0.2.0/27                             │ │
-│  │              │     │                                          │ │
-│  │  Ubuntu VM   │     │  PE-1 ──┐                                │ │
-│  │  WireGuard   │     │  PE-2 ──┼── Private Link ── Cluster B    │ │
-│  │  dnsmasq     │     │  PE-3 ──┘   (destination)                │ │
-│  └──────────────┘     └──────────────────────────────────────────┘ │
+│  ┌──────────────┐     ┌──────────────────────────────────────────┐  │
+│  │  VM subnet   │     │  Private Endpoint subnet                 │  │
+│  │  10.0.1.0/26 │     │  10.0.2.0/27                             │  │
+│  │              │     │                                          │  │
+│  │  Ubuntu VM   │     │  PE-1 ──┐                                │  │
+│  │  WireGuard   │     │  PE-2 ──┼── Private Link ── Cluster B    │  │
+│  │  dnsmasq     │     │  PE-3 ──┘   (destination)                │  │
+│  └──────────────┘     └──────────────────────────────────────────┘  │
 │         │                                                           │
-│         │  VNet Peering (10.50.0.0/16)                             │
-│         └──────────────────────────── Cluster A (source)           │
+│         │  VNet Peering (10.50.0.0/16)                              │
+│         └──────────────────────────── Cluster A (source)            │
 └─────────────────────────────────────────────────────────────────────┘
 
   Laptop ── WireGuard tunnel ── VM ── reaches both clusters
